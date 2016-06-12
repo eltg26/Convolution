@@ -598,7 +598,7 @@ int main(int argc, char **argv)
         MPI_Recv(&partsize,1,MPI_INT,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,&status);
 		MPI_Recv(&kernel_size,1,MPI_INT,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,&status3);
 
-		struct {int trozoR[partsize/(nprocs-1)];int trozoG[partsize/(nprocs-1)];int trozoB[partsize/(nprocs-1)]; int ancho; int alto; int kernelX; int kernelY; float vkern[9]; int imgpart; int particiones; int tamanhalo;} imagen1, modif1;
+		struct {int trozoR[partsize/(nprocs-1)];int trozoG[partsize/(nprocs-1)];int trozoB[partsize/(nprocs-1)]; int ancho; int alto; int kernelX; int kernelY; float vkern[kernel_size]; int imgpart; int particiones; int tamanhalo;} imagen1, modif1;
 	    MPI_Datatype datastruct1;
 	    int blocks1[11];
 	    MPI_Aint indices1[11];
