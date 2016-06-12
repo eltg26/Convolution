@@ -326,6 +326,7 @@ int main(int argc, char **argv)
     //////////////////////////////////////////////////////////////////////////////////////////////////
     // READING IMAGE HEADERS, KERNEL Matrix, DUPLICATE IMAGE DATA, OPEN RESULTING IMAGE FILE
     //////////////////////////////////////////////////////////////////////////////////////////////////
+    //Declarar las variables necesarias para el MPI
     int nprocs, rank;
     
     int imagesize,partitions, partsize, chunksize, halo, halosize, x, y, z, kernel_size;
@@ -335,7 +336,8 @@ int main(int argc, char **argv)
     FILE *fpsrc=NULL,*fpdst=NULL;
     ImagenData source=NULL, output=NULL;
     kernelData kern=NULL;
-        
+    
+    //Iniciar la paralelización MPI 
     MPI_INIT(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -396,14 +398,17 @@ int main(int argc, char **argv)
 	    // CHUNK READING
 	    //////////////////////////////////////////////////////////////////////////////////////////////////
 	    int c=0, offset=0;
+	    //Calcular el tamaño de la imagen y las partes que le correspponden a cada proceso y el tamaño del kernel, necesarios para crear la estructura con los tamaños reales
 	    imagesize = source->altura*source->ancho;
 	    partsize  = (source->altura*source->ancho)/partitions;
 	    kernel_size = kern->kernelX*kern->kernelY;
 
+		//Enviar las variables a los procesos esclavos para que puedan declarar la estructura
 		for(z=1;z<nprocs;z++){
 	        MPI_Send(&partsize,1,MPI_INT,z,0,MPI_COMM_WORLD);
 			MPI_Send(&kernel_size,1,MPI_INT,z,0,MPI_COMM_WORLD);
 		}
+		//Declarar la estructura
 		struct {int trozoR[partsize/(nprocs-1)];int trozoG[partsize/(nprocs-1)];int trozoB[partsize/(nprocs-1)]; int ancho; int alto; int kernelX; int kernelY; float vkern[kern->kernelX*kern->kernelY]; int imgpart; int particiones; int tamanhalo;} imagen, modif;
 		MPI_Status statusprueba;
 	    MPI_Datatype datastruct;
@@ -517,7 +522,8 @@ int main(int argc, char **argv)
 	        if ( duplicateImageChunk(source, output, chunksize) ) {
         	    return -1;
 	        }
-
+			
+			//Asignar los valores a cada variable de la estructura
 			imagen.alto = imagen.imgpart/source->ancho;
 			imagen.ancho = source->ancho;
 			imagen.particiones = partitions;
@@ -533,12 +539,14 @@ int main(int argc, char **argv)
 				for(y=0;y<imagen.imgpart;y++){
 					imagen.trozoR[y]=source->R[((x-1)*imagen.imgpart)+y];
 					imagen.trozoG[y]=source->G[((x-1)*imagen.imgpart)+y];
-			        imagen.trozoB[y]=source->B[((x-1)*imagen.imgpart)+y];
+			        	imagen.trozoB[y]=source->B[((x-1)*imagen.imgpart)+y];
 				}
+				//Enviar a cada proceso la estructura con la parte d ela imagen que le toca convolucionar
 				MPI_Send(&imagen,1,datastruct,x,0,MPI_COMM_WORLD);
 				printf("inicio %d\n",((x-1)*imagen.imgpart));
 			}
 			
+			//Recibir de cada uno de los procesos al finalizar la convolución
 			MPI_Status estado;
 			for(x=1;x<nprocs;x++){
 				printf("recibe %d", x);
@@ -593,94 +601,100 @@ int main(int argc, char **argv)
 	}
     else{
 		double start, elapsed;
+		//Recibir del proceso master las variables necesarias para declarar la estructura
 		MPI_Status status;
 		MPI_Status status3;
-        MPI_Recv(&partsize,1,MPI_INT,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,&status);
+        	MPI_Recv(&partsize,1,MPI_INT,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,&status);
 		MPI_Recv(&kernel_size,1,MPI_INT,MPI_ANY_SOURCE,MPI_ANY_TAG,MPI_COMM_WORLD,&status3);
 
-		struct {int trozoR[partsize/(nprocs-1)];int trozoG[partsize/(nprocs-1)];int trozoB[partsize/(nprocs-1)]; int ancho; int alto; int kernelX; int kernelY; float vkern[kernel_size]; int imgpart; int particiones; int tamanhalo;} imagen1, modif1;
+		//Cada proceso crea la estructura
+	  	struct {int trozoR[partsize/(nprocs-1)];int trozoG[partsize/(nprocs-1)];int trozoB[partsize/(nprocs-1)]; int ancho; int alto; int kernelX; int kernelY; float vkern[kernel_size]; int imgpart; int particiones; int tamanhalo;} imagen1, modif1;
 	    MPI_Datatype datastruct1;
 	    int blocks1[11];
 	    MPI_Aint indices1[11];
 	    MPI_Datatype MPItypes1[11];
 
 		blocks1[0]=partsize/(nprocs-1);
-        blocks1[1]=partsize/(nprocs-1);
-        blocks1[2]=partsize/(nprocs-1);
-        blocks1[3]=1;
-        blocks1[4]=1;
-        blocks1[5]=1;
-        blocks1[6]=1;
-        blocks1[7]=kernel_size;
-        blocks1[8]=1;
-        blocks1[9]=1;
-        blocks1[10]=1;
-
-
-        MPItypes1[0]=MPI_INT;
-        MPItypes1[1]=MPI_INT;
-        MPItypes1[2]=MPI_INT;
-        MPItypes1[3]=MPI_INT;
-        MPItypes1[4]=MPI_INT;
-        MPItypes1[5]=MPI_INT;
-        MPItypes1[6]=MPI_INT;
-        MPItypes1[7]=MPI_FLOAT;
-        MPItypes1[8]=MPI_INT;
-        MPItypes1[9]=MPI_INT;
-        MPItypes1[10]=MPI_INT;
+	        blocks1[1]=partsize/(nprocs-1);
+	        blocks1[2]=partsize/(nprocs-1);
+	        blocks1[3]=1;
+	        blocks1[4]=1;
+	        blocks1[5]=1;
+	        blocks1[6]=1;
+	        blocks1[7]=kernel_size;
+	        blocks1[8]=1;
+	        blocks1[9]=1;
+	        blocks1[10]=1;
+	
+	
+	        MPItypes1[0]=MPI_INT;
+	        MPItypes1[1]=MPI_INT;
+	        MPItypes1[2]=MPI_INT;
+	        MPItypes1[3]=MPI_INT;
+	        MPItypes1[4]=MPI_INT;
+	        MPItypes1[5]=MPI_INT;
+	        MPItypes1[6]=MPI_INT;
+	        MPItypes1[7]=MPI_FLOAT;
+	        MPItypes1[8]=MPI_INT;
+	        MPItypes1[9]=MPI_INT;
+	        MPItypes1[10]=MPI_INT;
 
 		MPI_Get_address(&imagen1.trozoR, &indices1[0]);
-        MPI_Get_address(&imagen1.trozoG, &indices1[1]);
-        MPI_Get_address(&imagen1.trozoB, &indices1[2]);
-        MPI_Get_address(&imagen1.ancho, &indices1[3]);
-        MPI_Get_address(&imagen1.alto, &indices1[4]);
-        MPI_Get_address(&imagen1.kernelX, &indices1[5]);
-        MPI_Get_address(&imagen1.kernelY, &indices1[6]);
-        MPI_Get_address(&imagen1.vkern, &indices1[7]);
-        MPI_Get_address(&imagen1.imgpart, &indices1[8]);
-        MPI_Get_address(&imagen1.particiones, &indices1[9]);
-        MPI_Get_address(&imagen1.tamanhalo, &indices1[10]);
-
-
-        MPI_Get_address(&modif1.trozoR, &indices1[0]);
-        MPI_Get_address(&modif1.trozoG, &indices1[1]);
-        MPI_Get_address(&modif1.trozoB, &indices1[2]);
-        MPI_Get_address(&modif1.ancho, &indices1[3]);
-        MPI_Get_address(&modif1.alto, &indices1[4]);
-        MPI_Get_address(&modif1.kernelX, &indices1[5]);
-        MPI_Get_address(&modif1.kernelY, &indices1[6]);
-        MPI_Get_address(&modif1.vkern, &indices1[7]);
-        MPI_Get_address(&modif1.imgpart, &indices1[8]);
-        MPI_Get_address(&modif1.particiones, &indices1[9]);
-        MPI_Get_address(&modif1.tamanhalo, &indices1[10]);
-
+	        MPI_Get_address(&imagen1.trozoG, &indices1[1]);
+	        MPI_Get_address(&imagen1.trozoB, &indices1[2]);
+	        MPI_Get_address(&imagen1.ancho, &indices1[3]);
+	        MPI_Get_address(&imagen1.alto, &indices1[4]);
+	        MPI_Get_address(&imagen1.kernelX, &indices1[5]);
+	        MPI_Get_address(&imagen1.kernelY, &indices1[6]);
+	        MPI_Get_address(&imagen1.vkern, &indices1[7]);
+	        MPI_Get_address(&imagen1.imgpart, &indices1[8]);
+	        MPI_Get_address(&imagen1.particiones, &indices1[9]);
+	        MPI_Get_address(&imagen1.tamanhalo, &indices1[10]);
+	
+	
+	        MPI_Get_address(&modif1.trozoR, &indices1[0]);
+	        MPI_Get_address(&modif1.trozoG, &indices1[1]);
+	        MPI_Get_address(&modif1.trozoB, &indices1[2]);
+	        MPI_Get_address(&modif1.ancho, &indices1[3]);
+	        MPI_Get_address(&modif1.alto, &indices1[4]);
+	        MPI_Get_address(&modif1.kernelX, &indices1[5]);
+	        MPI_Get_address(&modif1.kernelY, &indices1[6]);
+	        MPI_Get_address(&modif1.vkern, &indices1[7]);
+	        MPI_Get_address(&modif1.imgpart, &indices1[8]);
+	        MPI_Get_address(&modif1.particiones, &indices1[9]);
+	        MPI_Get_address(&modif1.tamanhalo, &indices1[10]);
+	
 	 	MPI_Aint baseaddress = indices1[0];
 
 		indices1[0]=indices1[0] - baseaddress;
-        indices1[1]=indices1[1] - baseaddress;
-        indices1[2]=indices1[2] - baseaddress;
-        indices1[3]=indices1[3] - baseaddress;
-        indices1[4]=indices1[4] - baseaddress;
-        indices1[5]=indices1[5] - baseaddress;
-        indices1[6]=indices1[6] - baseaddress;
-        indices1[7]=indices1[7] - baseaddress;
-        indices1[8]=indices1[8] - baseaddress;
-        indices1[9]=indices1[9] - baseaddress;
-        indices1[10]=indices1[10] - baseaddress;
+	        indices1[1]=indices1[1] - baseaddress;
+	        indices1[2]=indices1[2] - baseaddress;
+	        indices1[3]=indices1[3] - baseaddress;
+	        indices1[4]=indices1[4] - baseaddress;
+	        indices1[5]=indices1[5] - baseaddress;
+	        indices1[6]=indices1[6] - baseaddress;
+	        indices1[7]=indices1[7] - baseaddress;
+	        indices1[8]=indices1[8] - baseaddress;
+	        indices1[9]=indices1[9] - baseaddress;
+	        indices1[10]=indices1[10] - baseaddress;
 
 		MPI_Type_create_struct(11,blocks1,indices1,MPItypes1,&datastruct1);
-        MPI_Type_commit(&datastruct1);
-        MPI_Status status2;
-        MPI_Recv(&modif1,1,datastruct1,0,MPI_ANY_TAG,MPI_COMM_WORLD,&status2);
+	        MPI_Type_commit(&datastruct1);
+	        //Cada proceso recibe la la parte de la imagen que le conrresponde
+		MPI_Status status2;
+	        MPI_Recv(&modif1,1,datastruct1,0,MPI_ANY_TAG,MPI_COMM_WORLD,&status2);
 
+		//Comienza el proceso de convolución y se cuenta el tiempo que tardan los procesos
 		start = MPI_Wtime();			
-            convolve2D(modif1.trozoR, imagen1.trozoR, modif1.ancho, (modif1.alto/modif1.particiones)+modif1.tamanhalo, modif1.vkern, modif1.kernelX, modif1.kernelY);
-            convolve2D(modif1.trozoG, imagen1.trozoG, modif1.ancho, (modif1.alto/modif1.particiones)+modif1.tamanhalo, modif1.vkern, modif1.kernelX, modif1.kernelY);
-            convolve2D(modif1.trozoB, imagen1.trozoB, modif1.ancho, (modif1.alto/modif1.particiones)+modif1.tamanhalo, modif1.vkern, modif1.kernelX, modif1.kernelY);
+	            convolve2D(modif1.trozoR, imagen1.trozoR, modif1.ancho, (modif1.alto/modif1.particiones)+modif1.tamanhalo, modif1.vkern, modif1.kernelX, modif1.kernelY);
+	            convolve2D(modif1.trozoG, imagen1.trozoG, modif1.ancho, (modif1.alto/modif1.particiones)+modif1.tamanhalo, modif1.vkern, modif1.kernelX, modif1.kernelY);
+	            convolve2D(modif1.trozoB, imagen1.trozoB, modif1.ancho, (modif1.alto/modif1.particiones)+modif1.tamanhalo, modif1.vkern, modif1.kernelX, modif1.kernelY);
 		elapsed = MPI_Wtime() - start;
 
 		printf("Tiempo de convolucion %.6lf ", elapsed);
-        MPI_Send(&imagen1,1,datastruct1,0,0,MPI_COMM_WORLD);
+		
+		//Al finalizar envian la imagen convolucionada al proceso master
+		MPI_Send(&imagen1,1,datastruct1,0,0,MPI_COMM_WORLD);
  		MPI_Type_free(&datastruct1);
   
     }
